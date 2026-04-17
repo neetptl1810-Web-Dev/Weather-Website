@@ -1,18 +1,16 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: [
+                'resources/css/app.css',      // Keep for global/base styles (optional)
+                'resources/js/app.js',        // Keep for global scripts (optional)
+                'resources/css/weather.css',  // ✅ Weather page CSS
+                'resources/js/weather.js',    // ✅ Weather page JS
+            ],
             refresh: true,
         }),
-        tailwindcss(),
     ],
-    server: {
-        watch: {
-            ignored: ['**/storage/framework/views/**'],
-        },
-    },
 });
