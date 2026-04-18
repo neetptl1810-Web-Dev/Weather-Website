@@ -66,8 +66,8 @@
                         <button type="button" id="search-btn">🔍</button>
                     </div>
                     <div class="sun-times">
-                        <div class="sun-item">🌅 <span>{{ $sun['rise'] ?? '06:12' }}</span></div>
-                        <div class="sun-item">🌇 <span>{{ $sun['set'] ?? '18:45' }}</span></div>
+                        <div class="sun-item"> <span>{{ $sun['rise'] ?? '06:12' }}</span></div>
+                        <div class="sun-item"> <span>{{ $sun['set'] ?? '18:45' }}</span></div>
                     </div>
                 </div>
             </section>
