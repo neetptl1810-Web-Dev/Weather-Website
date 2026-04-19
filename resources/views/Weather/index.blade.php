@@ -138,48 +138,33 @@
             </section>
 
             <!-- Hourly Forecast -->
-            <section class="section-wrapper">
-                <h3 class="section-title">⏱️ Hourly Forecast</h3>
-                <div class="scroll-container">
-                    <div class="hourly-scroll">
-                        @for($i = 0; $i < 24; $i++)
-                        <div class="hourly-card glass">
-                            <span class="h-time">{{ now()->addHours($i)->format('H:i') }}</span>
-                            <span class="h-icon">🌤️</span>
-                            <span class="h-temp" data-celsius="{{ rand(18, 25) }}">
-                                {{ rand(18, 25) }}°
-                            </span>
-                        </div>
-                        @endfor
-                    </div>
-                </div>
-            </section>
+<div class="hourly-scroll">
+    @forelse($hourly as $hour)
+    <div class="hourly-card glass">
+        <span class="h-time">{{ $hour['time'] }}</span>
+        <span class="h-icon">{{ $hour['icon'] }}</span>
+        <span class="h-temp">{{ $hour['temp'] }}°</span>
+    </div>
+    @empty
+    <div class="hourly-card glass"><span>No hourly data</span></div>
+    @endforelse
+</div>
 
-            <!-- 7-Day Forecast -->
-            <section class="section-wrapper">
-                <h3 class="section-title">📅 7-Day Forecast</h3>
-                <div class="daily-forecast glass">
-                    @for($d = 0; $d < 7; $d++)
-                    <div class="daily-row" data-day="{{ $d }}">
-                        <span class="day-name">{{ now()->addDays($d)->format('l') }}</span>
-                        <span class="day-icon">☀️</span>
-                        <span class="day-temp">
-                            <span class="low" data-celsius="{{ rand(10, 15) }}">
-                                {{ rand(10, 15) }}°
-                            </span>
-                            <span class="high" data-celsius="{{ rand(18, 25) }}">
-                                {{ rand(18, 25) }}°
-                            </span>
-                        </span>
-                        <button class="expand-btn" aria-label="Expand details">▼</button>
-                        <div class="day-details">
-                            <p>💧 {{ rand(30, 80) }}% Humidity | 💨 {{ rand(5, 20) }} km/h Wind</p>
-                            <p>🌅 UV Index: {{ rand(1, 8) }} | ☀️ {{ rand(6, 10) }} hrs sunshine</p>
-                        </div>
-                    </div>
-                    @endfor
-                </div>
-            </section>
+<!-- 7-Day Forecast -->
+<div class="daily-forecast glass">
+    @forelse($daily as $day)
+    <div class="daily-row">
+        <span class="day-name">{{ $day['day'] }}</span>
+        <span class="day-icon">{{ $day['icon'] }}</span>
+        <span class="day-temp">
+            <span class="low">{{ $day['low'] }}°</span>
+            <span class="high">{{ $day['high'] }}°</span>
+        </span>
+    </div>
+    @empty
+    <p class="text-center p-4">Forecast unavailable</p>
+    @endforelse
+</div>
 
             <!-- Interactive Map -->
             <section class="section-wrapper">

@@ -378,37 +378,16 @@ const WeatherApp = {
     }
   },
 
-  // Mock API call for city suggestions
   async fetchCitySuggestions(query) {
-    await new Promise((resolve) => setTimeout(resolve, 200)); // Simulate network
-
-    const allCities = [
-      'London',
-      'New York',
-      'Tokyo',
-      'Sydney',
-      'Mumbai',
-      'Paris',
-      'Berlin',
-      'Toronto',
-      'Dubai',
-      'Singapore',
-      'Los Angeles',
-      'Chicago',
-      'Moscow',
-      'Beijing',
-      'Shanghai',
-      'Delhi',
-      'Bangkok',
-      'Istanbul',
-      'Rome',
-      'Madrid',
-    ];
-
-    return allCities
-      .filter((city) => city.toLowerCase().includes(query.toLowerCase()))
-      .slice(0, 5);
-  },
+    try {
+        const res = await fetch(`/api/cities/suggest?q=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error('Autocomplete failed');
+        return await res.json();
+    } catch (error) {
+        console.error(error);
+        return [];
+    }
+},
 
   renderAutocomplete(cities) {
     const list = this.elements.autocompleteList;
@@ -487,21 +466,22 @@ const WeatherApp = {
   performSearch() {
     const city = this.elements.citySearch?.value.trim();
     if (!city) {
-      this.showToast('Please enter a city name', 'error');
-      this.elements.citySearch?.focus();
-      return;
+        this.showToast('Please enter a city name', 'error');
+        this.elements.citySearch?.focus();
+        return;
     }
 
     this.state.currentCity = city;
     localStorage.setItem('weather-city', city);
-
-    // Show loading state
+    
+    // Show loading
     this.elements.searchBtn?.classList.add('loading');
-    this.showToast(`🔍 Searching for ${city}...`, 'info');
+    this.showToast(`🔍 Fetching weather for ${city}...`, 'info');
 
-    // Submit form (Laravel will handle the request)
+    // Submit to Laravel route
     document.querySelector('form')?.requestSubmit();
-  },
+},
+
 
   // 🔄 Auto-Refresh with Visual Indicator
   startAutoRefresh() {
@@ -514,36 +494,33 @@ const WeatherApp = {
 
   async refreshWeather() {
     if (this.state.isRefreshing) return;
-
     this.state.isRefreshing = true;
     this.elements.refreshBtn?.classList.add('spinning');
     this.showToast('🔄 Refreshing weather data...', 'info');
 
     try {
-      // Simulate API fetch delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // In production: fetch('/api/weather/refresh') or similar
-      this.state.lastFetch = new Date();
-      this.showToast('✅ Weather data updated', 'success');
-
-      // Update "Last updated" text if element exists
-      const lastUpdated = document.querySelector('.last-updated');
-      if (lastUpdated) {
-        lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-      }
-
-      // Re-animate background/icon
-      this.updateDynamicBackground();
-      this.animateWeatherIcon();
+        const res = await fetch(window.location.href, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        
+        if (!res.ok) throw new Error('Refresh failed');
+        
+        this.showToast('✅ Weather data updated', 'success');
+        
+        // Update last updated text
+        const lastUpdated = document.querySelector('.last-updated');
+        if (lastUpdated) lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        
+        this.updateDynamicBackground();
+        this.animateWeatherIcon();
     } catch (error) {
-      console.error('Refresh failed:', error);
-      this.showToast('Failed to refresh. Please try again.', 'error');
+        console.error(error);
+        this.showToast('Failed to refresh. Please try again.', 'error');
     } finally {
-      this.state.isRefreshing = false;
-      this.elements.refreshBtn?.classList.remove('spinning');
+        this.state.isRefreshing = false;
+        this.elements.refreshBtn?.classList.remove('spinning');
     }
-  },
+},
 
   // 🎨 Dynamic Background + Animated Icons
   updateDynamicBackground() {
