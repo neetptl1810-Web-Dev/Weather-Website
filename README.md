@@ -2,3 +2,5 @@ Need to work with the AI cause it's not working properly
 UI updated yesterday.
 MAde the UI much better and also solve the UI Problem where i got the screen into Half like it was a grid item.
 Did some of the monor changes with the UI.
+Just Checking the site Once More with the UI.
+
