@@ -6,3 +6,4 @@ Just Checking the site Once More with the UI.
 Fetching the Cities in the search bar.
 Need a break fronm this Project cause i am doing a virtual job simulation at with Forage within the Collab of the JP morgan.
 Back to this project from april 25
+workin on it from monday.
