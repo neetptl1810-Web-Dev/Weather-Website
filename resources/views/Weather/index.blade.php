@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather Broadcast</title>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
     @vite(['resources/css/weather.css', 'resources/js/weather.js'])
 </head>
 <body>
@@ -59,12 +63,14 @@
                     </p>
                 </div>
                 <div class="hero-right">
-                    <div class="search-container">
-                        <input type="text" id="city-search" placeholder="Search city..." 
-                               autocomplete="off" value="{{ request('city') }}">
-                        <div class="autocomplete-list" id="autocomplete-list"></div>
-                        <button type="button" id="search-btn">🔍</button>
-                    </div>
+                    <form action="{{ route('weather.index') }}" method="GET" class="search-form">
+                        <div class="search-container">
+                            <input type="text" id="city-search" name="city" placeholder="Search city..." 
+                                   autocomplete="off" value="{{ request('city') }}">
+                            <div class="autocomplete-list" id="autocomplete-list"></div>
+                            <button type="submit" id="search-btn">🔍</button>
+                        </div>
+                    </form>
                     <div class="sun-times">
                         <div class="sun-item"> <span>{{ $sun['rise'] ?? '06:12' }}</span></div>
                         <div class="sun-item"> <span>{{ $sun['set'] ?? '18:45' }}</span></div>
@@ -143,7 +149,7 @@
     <div class="hourly-card glass">
         <span class="h-time">{{ $hour['time'] }}</span>
         <span class="h-icon">{{ $hour['icon'] }}</span>
-        <span class="h-temp">{{ $hour['temp'] }}°</span>
+        <span class="h-temp" data-celsius="{{ $hour['temp'] }}">{{ $hour['temp'] }}°C</span>
     </div>
     @empty
     <div class="hourly-card glass"><span>No hourly data</span></div>
@@ -157,8 +163,8 @@
         <span class="day-name">{{ $day['day'] }}</span>
         <span class="day-icon">{{ $day['icon'] }}</span>
         <span class="day-temp">
-            <span class="low">{{ $day['low'] }}°</span>
-            <span class="high">{{ $day['high'] }}°</span>
+            <span class="low" data-celsius="{{ $day['low'] }}">{{ $day['low'] }}°C</span>
+            <span class="high" data-celsius="{{ $day['high'] }}">{{ $day['high'] }}°C</span>
         </span>
     </div>
     @empty
@@ -168,17 +174,11 @@
 
             <!-- Interactive Map -->
             <section class="section-wrapper">
-                <h3 class="section-title">🗺️ Live Radar Map</h3>
-                <div class="map-container glass">
-                    <div class="map-overlay">
-                        <button class="map-layer active" data-layer="temp">🌡️ Temp</button>
-                        <button class="map-layer" data-layer="rain">🌧️ Precipitation</button>
-                        <button class="map-layer" data-layer="wind">💨 Wind</button>
-                    </div>
-                    <div class="map-placeholder">
-                        <p>Interactive weather map loads here via Leaflet / Mapbox</p>
-                        <span class="map-credit">Powered by OpenWeatherMap Layers</span>
-                    </div>
+                <h3 class="section-title">🗺️ Live Interactive Map</h3>
+                <div class="map-container glass" 
+                     data-lat="{{ $current['lat'] ?? 51.5074 }}" 
+                     data-lon="{{ $current['lon'] ?? -0.1278 }}">
+                    <div id="weather-map" style="width: 100%; height: 400px; border-radius: var(--radius-lg); z-index: 1;"></div>
                 </div>
             </section>
         </main>

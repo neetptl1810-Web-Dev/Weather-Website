@@ -10,14 +10,13 @@ Route::get('/cities/suggest', function (\Illuminate\Http\Request $request) {
 
     $cacheKey = "suggest:{$query}";
     return Cache::remember($cacheKey, now()->addHours(24), function () use ($query) {
-        $res = Http::timeout(3)->get('https://api.openweathermap.org/geo/1.0/direct', [
-            'q' => $query,
-            'limit' => 8,
-            'appid' => config('services.weather.api_key')
+        $res = Http::withoutVerifying()->timeout(3)->get('https://geocoding-api.open-meteo.com/v1/search', [
+            'name' => $query,
+            'count' => 8
         ]);
 
-        return $res->successful() 
-            ? collect($res->json())->pluck('name')->unique()->values()
+        return $res->successful() && !empty($res->json()['results']) 
+            ? collect($res->json()['results'])->pluck('name')->unique()->values()
             : [];
     });
 })->middleware('throttle:30,1');

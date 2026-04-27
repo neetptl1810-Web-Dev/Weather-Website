@@ -37,6 +37,7 @@ const WeatherApp = {
     this.respectReducedMotion();
     this.setupAccessibility();
     this.injectAnimations();
+    this.initMap();
 
     // Auto-refresh if enabled
     if (this.config.refreshInterval > 0) {
@@ -102,12 +103,8 @@ const WeatherApp = {
       });
     }
 
-    // Search button + form submit
+    // Search button click — fill the input and let the native form submit
     this.elements.searchBtn?.addEventListener('click', () => this.performSearch());
-    document.querySelector('form')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.performSearch();
-    });
 
     // Geolocation
     this.elements.geoBtn?.addEventListener('click', () => this.detectLocation());
@@ -251,23 +248,37 @@ const WeatherApp = {
   convertTemperatures() {
     const isMetric = this.config.units === 'metric';
     const convert = (celsius) =>
-      isMetric ? celsius : Math.round((celsius * 9) / 5 + 32);
+      isMetric ? parseFloat(celsius) : Math.round((parseFloat(celsius) * 9) / 5 + 32);
     const unit = isMetric ? '°C' : '°F';
 
     // Update current temp
     const tempEl = document.getElementById('current-temp');
-    const feelsEl = document.getElementById('feels-like');
     if (tempEl && tempEl.dataset.celsius) {
-      tempEl.textContent = `${convert(parseFloat(tempEl.dataset.celsius))}${unit}`;
+      tempEl.textContent = `${convert(tempEl.dataset.celsius)}${unit}`;
     }
+
+    // Update feels like – number + label
+    const feelsEl = document.getElementById('feels-like');
     if (feelsEl && feelsEl.dataset.celsius) {
-      feelsEl.textContent = convert(parseFloat(feelsEl.dataset.celsius));
+      feelsEl.textContent = convert(feelsEl.dataset.celsius);
+    }
+    // Update the static unit suffix next to feels like
+    const feelsUnit = document.querySelector('.feels-like');
+    if (feelsUnit) {
+      feelsUnit.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE && node.textContent.includes('°')) {
+          node.textContent = unit + '\n';
+        }
+      });
+      // Simpler: replace °C/°F suffix text
+      const feelsHtml = feelsUnit.innerHTML;
+      feelsUnit.innerHTML = feelsHtml.replace(/°[CF]\s*$/, unit);
     }
 
     // Update hourly cards
     document.querySelectorAll('.hourly-card .h-temp').forEach((el) => {
       if (el.dataset.celsius) {
-        el.textContent = `${convert(parseFloat(el.dataset.celsius))}${unit}`;
+        el.textContent = `${convert(el.dataset.celsius)}${unit}`;
       }
     });
 
@@ -276,7 +287,7 @@ const WeatherApp = {
       .querySelectorAll('.day-temp .high, .day-temp .low')
       .forEach((el) => {
         if (el.dataset.celsius) {
-          el.textContent = `${convert(parseFloat(el.dataset.celsius))}${unit}`;
+          el.textContent = `${convert(el.dataset.celsius)}${unit}`;
         }
       });
   },
@@ -335,22 +346,38 @@ const WeatherApp = {
     }
   },
 
-  // Mock reverse geocode (replace with OpenCage/Mapbox API)
   async reverseGeocode(lat, lon) {
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=1`);
+      if (!res.ok) throw new Error('Reverse geocoding failed');
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results[0].name;
+      }
+      return null;
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  },
 
-    // Mock responses for demo
-    const mockCities = {
-      '51.5074,-0.1278': 'London',
-      '40.7128,-74.0060': 'New York',
-      '35.6762,139.6503': 'Tokyo',
-      '-33.8688,151.2093': 'Sydney',
-      '19.0760,72.8777': 'Mumbai',
-    };
+  initMap() {
+    const mapContainer = document.querySelector('.map-container');
+    if (!mapContainer || typeof L === 'undefined') return;
 
-    const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
-    return mockCities[key] || null;
+    const lat = parseFloat(mapContainer.dataset.lat) || 51.5074;
+    const lon = parseFloat(mapContainer.dataset.lon) || -0.1278;
+
+    this.map = L.map('weather-map').setView([lat, lon], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(this.map);
+
+    const cityName = this.state.currentCity || document.querySelector('.location')?.childNodes[0]?.textContent?.trim() || 'Location';
+    L.marker([lat, lon]).addTo(this.map)
+      .bindPopup(`<b>${cityName}</b>`)
+      .openPopup();
   },
 
   initGeolocation() {
@@ -466,21 +493,17 @@ const WeatherApp = {
   performSearch() {
     const city = this.elements.citySearch?.value.trim();
     if (!city) {
-        this.showToast('Please enter a city name', 'error');
-        this.elements.citySearch?.focus();
-        return;
+      this.showToast('Please enter a city name', 'error');
+      this.elements.citySearch?.focus();
+      return;
     }
-
     this.state.currentCity = city;
     localStorage.setItem('weather-city', city);
-    
-    // Show loading
-    this.elements.searchBtn?.classList.add('loading');
     this.showToast(`🔍 Fetching weather for ${city}...`, 'info');
-
-    // Submit to Laravel route
-    document.querySelector('form')?.requestSubmit();
-},
+    // Submit the native form — it posts ?city=... to the Laravel route
+    const form = document.querySelector('.search-form');
+    if (form) form.submit();
+  },
 
 
   // 🔄 Auto-Refresh with Visual Indicator

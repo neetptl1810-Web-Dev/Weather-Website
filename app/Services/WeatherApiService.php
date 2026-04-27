@@ -4,26 +4,12 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Exception;
 
 class WeatherApiService
 {
-    protected string $apiKey;
-    protected string $baseUrl;
-
-    public function __construct()
-    {
-        $this->apiKey = config('services.weather.api_key');
-        $this->baseUrl = config('services.weather.base_url', 'https://api.openweathermap.org/data/2.5');
-        
-        if (!$this->apiKey) {
-            throw new Exception('Weather API key is missing. Add WEATHER_API_KEY to your .env file.');
-        }
-    }
-
     /**
-     * Fetch complete weather data for a city
+     * Fetch complete weather data for a city using Open-Meteo (No API Key Required)
      */
     public function fetchCompleteWeather(string $city): array
     {
@@ -33,12 +19,64 @@ class WeatherApiService
             throw new Exception("City '{$city}' not found.");
         }
 
-        // 2. Fetch all data in parallel
-        $current = $this->getCurrentWeather($geo['lat'], $geo['lon']);
-        $forecast = $this->getForecast($geo['lat'], $geo['lon']);
-        $aqi = $this->getAirQuality($geo['lat'], $geo['lon']);
+        // 2. Fetch weather and AQI
+        $weatherRes = Http::withoutVerifying()->timeout(5)->get("https://api.open-meteo.com/v1/forecast", [
+            'latitude' => $geo['lat'],
+            'longitude' => $geo['lon'],
+            'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,visibility',
+            'hourly' => 'temperature_2m,weather_code',
+            'daily' => 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max',
+            'timezone' => $geo['timezone'] ?? 'auto'
+        ]);
 
-        return $this->mapToViewStructure($current, $forecast, $aqi, $geo);
+        $aqiRes = Http::withoutVerifying()->timeout(5)->get("https://air-quality-api.open-meteo.com/v1/air-quality", [
+            'latitude' => $geo['lat'],
+            'longitude' => $geo['lon'],
+            'current' => 'european_aqi'
+        ]);
+
+        if (!$weatherRes->successful()) {
+            throw new Exception("Failed to fetch weather data from Open-Meteo.");
+        }
+
+        $weather = $weatherRes->json();
+        $aqi = $aqiRes->successful() ? $aqiRes->json() : [];
+
+        return $this->mapToViewStructure($weather, $aqi, $geo);
+    }
+
+    /**
+     * Search & fetch specific city (for show route)
+     */
+    public function getWeather(string $city): array
+    {
+        $geo = $this->getCityCoordinates($city);
+        if (!$geo) {
+            throw new Exception("City '{$city}' not found.");
+        }
+
+        $weatherRes = Http::withoutVerifying()->timeout(5)->get("https://api.open-meteo.com/v1/forecast", [
+            'latitude' => $geo['lat'],
+            'longitude' => $geo['lon'],
+            'current' => 'temperature_2m,relative_humidity_2m,weather_code',
+            'timezone' => 'auto'
+        ]);
+
+        if (!$weatherRes->successful()) {
+            throw new Exception("Failed to fetch weather data.");
+        }
+
+        $weather = $weatherRes->json();
+        $wmo = $this->getWmoStatus($weather['current']['weather_code'] ?? 0);
+
+        return [
+            'city' => $geo['name'],
+            'country_code' => $geo['country_code'] ?? '',
+            'temperature' => round($weather['current']['temperature_2m'] ?? 0, 1),
+            'status' => $wmo['status'],
+            'description' => $wmo['status'],
+            'humidity' => $weather['current']['relative_humidity_2m'] ?? 0,
+        ];
     }
 
     /**
@@ -46,143 +84,182 @@ class WeatherApiService
      */
     protected function getCityCoordinates(string $city): ?array
     {
-        $cacheKey = "geo:{$city}";
+        $cacheKey = "geo_om:{$city}";
         return Cache::remember($cacheKey, now()->addDays(7), function () use ($city) {
-            $res = Http::timeout(5)->get("{$this->baseUrl}/geo/1.0/direct", [
-                'q' => $city,
-                'limit' => 1,
-                'appid' => $this->apiKey
+            $res = Http::withoutVerifying()->timeout(5)->get("https://geocoding-api.open-meteo.com/v1/search", [
+                'name' => $city,
+                'count' => 1
             ]);
 
-            return $res->successful() ? ($res->json()[0] ?? null) : null;
+            if ($res->successful() && !empty($res->json()['results'])) {
+                $result = $res->json()['results'][0];
+                return [
+                    'lat' => $result['latitude'],
+                    'lon' => $result['longitude'],
+                    'name' => $result['name'],
+                    'country_code' => $result['country_code'] ?? '',
+                    'timezone' => $result['timezone'] ?? 'auto'
+                ];
+            }
+
+            return null;
         });
-    }
-
-    /**
-     * Current weather
-     */
-    protected function getCurrentWeather(float $lat, float $lon): array
-    {
-        $res = Http::timeout(5)->get("{$this->baseUrl}/weather", [
-            'lat' => $lat, 'lon' => $lon,
-            'units' => 'metric', 'appid' => $this->apiKey
-        ]);
-
-        return $res->successful() ? $res->json() : [];
-    }
-
-    /**
-     * 5-day / 3-hour forecast
-     */
-    protected function getForecast(float $lat, float $lon): array
-    {
-        $res = Http::timeout(5)->get("{$this->baseUrl}/forecast", [
-            'lat' => $lat, 'lon' => $lon,
-            'units' => 'metric', 'appid' => $this->apiKey
-        ]);
-
-        return $res->successful() ? $res->json() : [];
-    }
-
-    /**
-     * Air Quality Index
-     */
-    protected function getAirQuality(float $lat, float $lon): array
-    {
-        $res = Http::timeout(5)->get("https://api.openweathermap.org/data/2.5/air_pollution", [
-            'lat' => $lat, 'lon' => $lon, 'appid' => $this->apiKey
-        ]);
-
-        return $res->successful() ? ($res->json()['list'][0] ?? []) : [];
     }
 
     /**
      * Map raw API data to your Blade structure
      */
-    protected function mapToViewStructure(array $current, array $forecast, array $aqi, array $geo): array
+    protected function mapToViewStructure(array $weather, array $aqi, array $geo): array
     {
+        $current = $weather['current'] ?? [];
+        $daily = $weather['daily'] ?? [];
+        $hourly = $weather['hourly'] ?? [];
+
+        $wmo = $this->getWmoStatus($current['weather_code'] ?? 0);
+
         return [
             'current' => [
-                'city' => $current['name'] ?? $geo['name'],
-                'country_code' => $current['sys']['country'] ?? $geo['country'],
-                'temperature' => round($current['main']['temp'] ?? 0, 1),
-                'feels_like' => round($current['main']['feels_like'] ?? 0, 1),
-                'status' => $current['weather'][0]['main'] ?? 'Unknown',
-                'icon' => $this->getIconCode($current['weather'][0]['icon'] ?? '01d'),
-                'description' => ucfirst($current['weather'][0]['description'] ?? 'No description'),
-                'humidity' => $current['main']['humidity'] ?? 0,
+                'city' => $geo['name'],
+                'country_code' => $geo['country_code'] ?? '',
+                'lat' => $geo['lat'],
+                'lon' => $geo['lon'],
+                'temperature' => round($current['temperature_2m'] ?? 0, 1),
+                'feels_like' => round($current['apparent_temperature'] ?? 0, 1),
+                'status' => $wmo['status'],
+                'icon' => $wmo['icon'],
+                'description' => $wmo['status'],
+                'humidity' => $current['relative_humidity_2m'] ?? 0,
             ],
             'sun' => [
-                'rise' => date('h:i A', $current['sys']['sunrise'] ?? time()),
-                'set'  => date('h:i A', $current['sys']['sunset'] ?? time()),
+                'rise' => isset($daily['sunrise'][0]) ? date('h:i A', strtotime($daily['sunrise'][0])) : '--',
+                'set'  => isset($daily['sunset'][0]) ? date('h:i A', strtotime($daily['sunset'][0])) : '--',
             ],
             'metrics' => [
-                'humidity'   => ['val' => $current['main']['humidity'] ?? 0, 'unit' => '%', 'icon' => '💧'],
-                'wind'       => ['val' => round($current['wind']['speed'] ?? 0, 1), 'unit' => 'm/s', 'icon' => '💨'],
-                'pressure'   => ['val' => $current['main']['pressure'] ?? 0, 'unit' => 'hPa', 'icon' => '📊'],
-                'uv'         => ['val' => $forecast['list'][0]['uvi'] ?? 0, 'unit' => '', 'icon' => '☀️'],
+                'humidity'   => ['val' => $current['relative_humidity_2m'] ?? 0, 'unit' => '%', 'icon' => '💧'],
+                'wind'       => ['val' => round($current['wind_speed_10m'] ?? 0, 1), 'unit' => 'km/h', 'icon' => '💨'],
+                'pressure'   => ['val' => $current['pressure_msl'] ?? 0, 'unit' => 'hPa', 'icon' => '📊'],
+                'uv'         => ['val' => $daily['uv_index_max'][0] ?? 0, 'unit' => '', 'icon' => '☀️'],
                 'visibility' => ['val' => round(($current['visibility'] ?? 10000) / 1000, 1), 'unit' => 'km', 'icon' => '👁️'],
-                'aqi'        => $this->formatAqi($aqi['main']['aqi'] ?? 1),
+                'aqi'        => $this->formatAqi($aqi['current']['european_aqi'] ?? 20),
             ],
-            'hourly' => $this->extractHourly($forecast),
-            'daily'  => $this->extractDaily($forecast),
-            'alerts' => [], // OWM free tier doesn't include alerts
+            'hourly' => $this->extractHourly($hourly),
+            'daily'  => $this->extractDaily($daily),
+            'alerts' => [], // Open-Meteo doesn't easily provide alerts out of the box
             'weatherData' => [
-                $current['name'] ?? $geo['name'] => [
-                    'city' => $current['name'] ?? $geo['name'],
-                    'country_code' => $current['sys']['country'] ?? $geo['country'],
-                    'temperature' => round($current['main']['temp'] ?? 0, 1),
-                    'status' => $current['weather'][0]['main'] ?? 'Unknown',
-                    'description' => ucfirst($current['weather'][0]['description'] ?? ''),
-                    'humidity' => $current['main']['humidity'] ?? 0,
+                $geo['name'] => [
+                    'city' => $geo['name'],
+                    'country_code' => $geo['country_code'] ?? '',
+                    'temperature' => round($current['temperature_2m'] ?? 0, 1),
+                    'status' => $wmo['status'],
+                    'description' => $wmo['status'],
+                    'humidity' => $current['relative_humidity_2m'] ?? 0,
                 ]
             ]
         ];
     }
 
-    protected function getIconCode(string $code): string
+    protected function getWmoStatus(int $code): array
     {
-        $map = ['01d' => '☀️', '01n' => '🌙', '02d' => '🌤️', '02n' => '🌙', '03d' => '☁️', '04d' => '☁️', '09d' => '🌧️', '10d' => '🌦️', '11d' => '⛈️', '13d' => '❄️', '50d' => '🌫️'];
-        return $map[$code] ?? '🌤️';
+        $map = [
+            0 => ['status' => 'Clear Sky', 'icon' => '☀️'],
+            1 => ['status' => 'Mainly Clear', 'icon' => '🌤️'],
+            2 => ['status' => 'Partly Cloudy', 'icon' => '⛅'],
+            3 => ['status' => 'Overcast', 'icon' => '☁️'],
+            45 => ['status' => 'Fog', 'icon' => '🌫️'],
+            48 => ['status' => 'Depositing Rime Fog', 'icon' => '🌫️'],
+            51 => ['status' => 'Light Drizzle', 'icon' => '🌧️'],
+            53 => ['status' => 'Moderate Drizzle', 'icon' => '🌧️'],
+            55 => ['status' => 'Dense Drizzle', 'icon' => '🌧️'],
+            56 => ['status' => 'Freezing Drizzle', 'icon' => '🌧️'],
+            57 => ['status' => 'Dense Freezing Drizzle', 'icon' => '🌧️'],
+            61 => ['status' => 'Slight Rain', 'icon' => '🌧️'],
+            63 => ['status' => 'Moderate Rain', 'icon' => '🌧️'],
+            65 => ['status' => 'Heavy Rain', 'icon' => '🌧️'],
+            66 => ['status' => 'Light Freezing Rain', 'icon' => '🌧️'],
+            67 => ['status' => 'Heavy Freezing Rain', 'icon' => '🌧️'],
+            71 => ['status' => 'Slight Snow', 'icon' => '❄️'],
+            73 => ['status' => 'Moderate Snow', 'icon' => '❄️'],
+            75 => ['status' => 'Heavy Snow', 'icon' => '❄️'],
+            77 => ['status' => 'Snow Grains', 'icon' => '❄️'],
+            80 => ['status' => 'Slight Rain Showers', 'icon' => '🌦️'],
+            81 => ['status' => 'Moderate Rain Showers', 'icon' => '🌦️'],
+            82 => ['status' => 'Violent Rain Showers', 'icon' => '🌦️'],
+            85 => ['status' => 'Slight Snow Showers', 'icon' => '❄️'],
+            86 => ['status' => 'Heavy Snow Showers', 'icon' => '❄️'],
+            95 => ['status' => 'Thunderstorm', 'icon' => '⛈️'],
+            96 => ['status' => 'Thunderstorm with Hail', 'icon' => '⛈️'],
+            99 => ['status' => 'Heavy Thunderstorm with Hail', 'icon' => '⛈️'],
+        ];
+
+        return $map[$code] ?? ['status' => 'Unknown', 'icon' => '🌤️'];
     }
 
-    protected function formatAqi(int $aqi): array
+    protected function formatAqi(float $europeanAqi): array
     {
-        $levels = [1 => 'good', 2 => 'moderate', 3 => 'moderate', 4 => 'poor', 5 => 'poor'];
-        $labels = [1 => 'Good', 2 => 'Fair', 3 => 'Moderate', 4 => 'Poor', 5 => 'Very Poor'];
+        if ($europeanAqi <= 20) { $level = 'good'; $val = 1; }
+        elseif ($europeanAqi <= 40) { $level = 'good'; $val = 2; }
+        elseif ($europeanAqi <= 60) { $level = 'moderate'; $val = 3; }
+        elseif ($europeanAqi <= 80) { $level = 'poor'; $val = 4; }
+        else { $level = 'poor'; $val = 5; }
+
         return [
-            'val' => $aqi * 20, // Scale to 100 for CSS
-            'level' => $levels[$aqi] ?? 'good',
-            'icon' => '🫁'
+            'val' => $val * 20, // Scale to 100 for CSS
+            'level' => $level,
+            'icon' => '🫁',
+            'unit' => ''
         ];
     }
 
-    protected function extractHourly(array $forecast): array
+    protected function extractHourly(array $hourly): array
     {
-        return collect($forecast['list'] ?? [])
-            ->take(8)
-            ->map(fn($item) => [
-                'time' => date('H:i', strtotime($item['dt_txt'])),
-                'temp' => round($item['main']['temp'], 1),
-                'icon' => $this->getIconCode($item['weather'][0]['icon']),
-            ])->values()->all();
+        if (empty($hourly['time'])) return [];
+        
+        $now = time();
+        $items = [];
+        
+        foreach ($hourly['time'] as $index => $time) {
+            $timestamp = strtotime($time);
+            if ($timestamp >= $now && count($items) < 8) {
+                $wmo = $this->getWmoStatus($hourly['weather_code'][$index] ?? 0);
+                $items[] = [
+                    'time' => date('H:i', $timestamp),
+                    'temp' => round($hourly['temperature_2m'][$index] ?? 0, 1),
+                    'icon' => $wmo['icon'],
+                ];
+            }
+        }
+        
+        // Fallback if no upcoming hours found
+        if (empty($items)) {
+            for ($i=0; $i<8; $i++) {
+                if (!isset($hourly['time'][$i])) break;
+                $wmo = $this->getWmoStatus($hourly['weather_code'][$i] ?? 0);
+                $items[] = [
+                    'time' => date('H:i', strtotime($hourly['time'][$i])),
+                    'temp' => round($hourly['temperature_2m'][$i] ?? 0, 1),
+                    'icon' => $wmo['icon'],
+                ];
+            }
+        }
+        
+        return $items;
     }
 
-    protected function extractDaily(array $forecast): array
+    protected function extractDaily(array $daily): array
     {
-        $daily = collect($forecast['list'] ?? [])
-            ->groupBy(fn($item) => date('Y-m-d', strtotime($item['dt_txt'])))
-            ->take(7)
-            ->map(function ($day) {
-                $temps = $day->pluck('main.temp');
-                return [
-                    'day' => date('l', strtotime($day->first()['dt_txt'])),
-                    'high' => round($temps->max(), 1),
-                    'low' => round($temps->min(), 1),
-                    'icon' => $this->getIconCode($day->first()['weather'][0]['icon']),
-                ];
-            })->values()->all();
-
-        return $daily;
+        if (empty($daily['time'])) return [];
+        
+        $items = [];
+        foreach ($daily['time'] as $index => $time) {
+            if ($index >= 7) break;
+            $wmo = $this->getWmoStatus($daily['weather_code'][$index] ?? 0);
+            $items[] = [
+                'day' => date('l', strtotime($time)),
+                'high' => round($daily['temperature_2m_max'][$index] ?? 0, 1),
+                'low' => round($daily['temperature_2m_min'][$index] ?? 0, 1),
+                'icon' => $wmo['icon'],
+            ];
+        }
+        return $items;
     }
 }
