@@ -8,3 +8,4 @@ Need a break fronm this Project cause i am doing a virtual job simulation at wit
 Back to this project from april 25
 workin on it from monday.
 Ai will definitely take our jobs
+skipped for  today [tuesday] - 29th April 2026 and gonna surely work from tommorrow on the UI and features.
