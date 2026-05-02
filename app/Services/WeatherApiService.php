@@ -24,7 +24,7 @@ class WeatherApiService
             'latitude' => $geo['lat'],
             'longitude' => $geo['lon'],
             'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,visibility',
-            'hourly' => 'temperature_2m,weather_code',
+            'hourly' => 'temperature_2m,weather_code,precipitation_probability',
             'daily' => 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max',
             'timezone' => $geo['timezone'] ?? 'auto'
         ]);
@@ -214,32 +214,21 @@ class WeatherApiService
     {
         if (empty($hourly['time'])) return [];
         
-        $now = time();
         $items = [];
-        
         foreach ($hourly['time'] as $index => $time) {
-            $timestamp = strtotime($time);
-            if ($timestamp >= $now && count($items) < 8) {
-                $wmo = $this->getWmoStatus($hourly['weather_code'][$index] ?? 0);
-                $items[] = [
-                    'time' => date('H:i', $timestamp),
-                    'temp' => round($hourly['temperature_2m'][$index] ?? 0, 1),
-                    'icon' => $wmo['icon'],
-                ];
+            $date = date('Y-m-d', strtotime($time));
+            $wmo = $this->getWmoStatus($hourly['weather_code'][$index] ?? 0);
+            
+            if (!isset($items[$date])) {
+                $items[$date] = [];
             }
-        }
-        
-        // Fallback if no upcoming hours found
-        if (empty($items)) {
-            for ($i=0; $i<8; $i++) {
-                if (!isset($hourly['time'][$i])) break;
-                $wmo = $this->getWmoStatus($hourly['weather_code'][$i] ?? 0);
-                $items[] = [
-                    'time' => date('H:i', strtotime($hourly['time'][$i])),
-                    'temp' => round($hourly['temperature_2m'][$i] ?? 0, 1),
-                    'icon' => $wmo['icon'],
-                ];
-            }
+            
+            $items[$date][] = [
+                'time' => date('H:i', strtotime($time)),
+                'temp' => round($hourly['temperature_2m'][$index] ?? 0, 1),
+                'icon' => $wmo['icon'],
+                'precip' => $hourly['precipitation_probability'][$index] ?? 0,
+            ];
         }
         
         return $items;
@@ -254,6 +243,7 @@ class WeatherApiService
             if ($index >= 7) break;
             $wmo = $this->getWmoStatus($daily['weather_code'][$index] ?? 0);
             $items[] = [
+                'date' => $time,
                 'day' => date('l', strtotime($time)),
                 'high' => round($daily['temperature_2m_max'][$index] ?? 0, 1),
                 'low' => round($daily['temperature_2m_min'][$index] ?? 0, 1),

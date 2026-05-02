@@ -18,7 +18,7 @@ class WeatherController extends Controller
 
         try {
             // Cache for 10 mins to respect API rate limits
-            $data = Cache::remember("weather:{$city}", now()->addMinutes(10), function () use ($city) {
+            $data = Cache::remember("weather_v2:{$city}", now()->addMinutes(10), function () use ($city) {
                 return app(\App\Services\WeatherApiService::class)->fetchCompleteWeather($city);
             });
 
