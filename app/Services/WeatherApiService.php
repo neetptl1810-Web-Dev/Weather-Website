@@ -42,7 +42,16 @@ class WeatherApiService
         $weather = $weatherRes->json();
         $aqi = $aqiRes->successful() ? $aqiRes->json() : [];
 
-        return $this->mapToViewStructure($weather, $aqi, $geo);
+        $data = $this->mapToViewStructure($weather, $aqi, $geo);
+
+        // Add smart fallback alerts if needed
+        if (!empty($geo['is_ultimate_fallback'])) {
+            $data['alerts'][] = ['message' => "Location '{$geo['original_query']}' not found. Automatically showing nearest valid location: {$geo['name']}."];
+        } else if (!empty($geo['is_fallback'])) {
+            $data['alerts'][] = ['message' => "Exact match for '{$city}' not found. Showing nearest match: {$geo['name']}."];
+        }
+
+        return $data;
     }
 
     /**
@@ -84,8 +93,9 @@ class WeatherApiService
      */
     protected function getCityCoordinates(string $city): ?array
     {
-        $cacheKey = "geo_om:{$city}";
+        $cacheKey = "geo_om_fallback_v1:{$city}";
         return Cache::remember($cacheKey, now()->addDays(7), function () use ($city) {
+            // 1. Primary: Open-Meteo Geocoding
             $res = Http::withoutVerifying()->timeout(5)->get("https://geocoding-api.open-meteo.com/v1/search", [
                 'name' => $city,
                 'count' => 1
@@ -102,7 +112,40 @@ class WeatherApiService
                 ];
             }
 
-            return null;
+            // 2. Secondary: Nominatim (OSM) Fallback
+            $resNom = Http::withoutVerifying()
+                ->timeout(5)
+                ->withHeaders(['User-Agent' => 'WeatherBroadcastApp/1.0 (Laravel)'])
+                ->get("https://nominatim.openstreetmap.org/search", [
+                    'q' => $city,
+                    'format' => 'json',
+                    'limit' => 1,
+                    'addressdetails' => 1
+                ]);
+            
+            if ($resNom->successful() && !empty($resNom->json())) {
+                $result = $resNom->json()[0];
+                $countryCode = $result['address']['country_code'] ?? '';
+                return [
+                    'lat' => $result['lat'],
+                    'lon' => $result['lon'],
+                    'name' => explode(',', $result['display_name'])[0],
+                    'country_code' => strtoupper($countryCode),
+                    'timezone' => 'auto',
+                    'is_fallback' => true
+                ];
+            }
+
+            // 3. Ultimate Fallback (London)
+            return [
+                'lat' => 51.5074,
+                'lon' => -0.1278,
+                'name' => 'London',
+                'country_code' => 'GB',
+                'timezone' => 'auto',
+                'is_ultimate_fallback' => true,
+                'original_query' => $city
+            ];
         });
     }
 

@@ -1067,3 +1067,103 @@ body {
     text-align: center;
   }
 }
+
+/* ── DYNAMIC WEATHER THEMES ───────────────────────────────── */
+
+/* Base transition for background */
+body.dynamic-weather {
+  transition: background 1s ease-in-out;
+}
+
+/* ☀️ Sunny Theme */
+body.theme-sunny {
+  background: linear-gradient(135deg, #fff3cd 0%, #f4f5f7 100%);
+}
+[data-theme="dark"] body.theme-sunny {
+  background: linear-gradient(135deg, rgba(255, 209, 0, 0.08) 0%, #0d1117 100%);
+}
+
+/* 🌧️ Rain Theme */
+body.theme-rain {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f4f5f7 100%);
+}
+[data-theme="dark"] body.theme-rain {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, #0d1117 100%);
+}
+
+/* ❄️ Snow Theme */
+body.theme-snow {
+  background: linear-gradient(135deg, #e8eaf6 0%, #f4f5f7 100%);
+}
+[data-theme="dark"] body.theme-snow {
+  background: linear-gradient(135deg, rgba(63, 81, 181, 0.1) 0%, #0d1117 100%);
+}
+
+/* ⛈️ Storm Theme */
+body.theme-storm {
+  background: linear-gradient(135deg, #cfd8dc 0%, #f4f5f7 100%);
+}
+[data-theme="dark"] body.theme-storm {
+  background: linear-gradient(135deg, rgba(96, 125, 139, 0.15) 0%, #0d1117 100%);
+}
+
+/* ☁️ Cloudy Theme (Default) */
+body.theme-cloudy {
+  background: var(--col-bg); /* Use default */
+}
+
+/* ── PARTICLES SYSTEM ─────────────────────────────────────── */
+.weather-particles-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1; /* Behind UI, but above bg */
+  overflow: hidden;
+}
+
+/* Rain Drop */
+.rain-drop {
+  position: absolute;
+  top: -20px;
+  width: 1px;
+  height: 15px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(0, 123, 255, 0.8));
+  animation: rain-fall linear infinite;
+}
+[data-theme="dark"] .rain-drop {
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(100, 181, 246, 0.6));
+}
+
+@keyframes rain-fall {
+  0% { transform: translateY(0) scaleY(1); opacity: 1; }
+  100% { transform: translateY(110vh) scaleY(1.5); opacity: 0; }
+}
+
+/* Snow Flake */
+.snow-flake {
+  position: absolute;
+  top: -20px;
+  background: #fff;
+  border-radius: 50%;
+  animation: snow-fall linear infinite;
+  box-shadow: 0 0 4px rgba(255,255,255,0.8);
+}
+[data-theme="dark"] .snow-flake {
+  background: #e6edf3;
+  box-shadow: 0 0 3px rgba(230, 237, 243, 0.5);
+}
+
+@keyframes snow-fall {
+  0% { transform: translateY(0) translateX(0); opacity: 1; }
+  50% { transform: translateY(50vh) translateX(20px); opacity: 0.8; }
+  100% { transform: translateY(110vh) translateX(-20px); opacity: 0; }
+}
+
+/* Make sure UI elements are above particles */
+.site-header, .page-wrapper, .site-footer {
+  position: relative;
+  z-index: 10;
+}

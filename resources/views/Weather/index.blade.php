@@ -25,7 +25,7 @@
                     <circle cx="12" cy="12" r="5" fill="#FFD100"/>
                     <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="#FFD100" stroke-width="2" stroke-linecap="round"/>
                 </svg>
-                <span class="brand-name">Weather<strong>Broadcast</strong></span>
+                <span class="brand-name">Weather<strong> Broadcast</strong></span>
             </div>
 
             <form action="{{ route('weather.index') }}" method="GET" class="header-search-form" role="search">
@@ -53,10 +53,12 @@
 
     <!-- ─── ALERTS ──────────────────────────────────────────── -->
     @if(!empty($alerts))
-        <div class="alert-strip" role="alert">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <strong>Weather Alert:</strong> {{ $alerts[0]['message'] ?? 'Severe weather expected in your area.' }}
-        </div>
+        @foreach($alerts as $alert)
+            <div class="alert-strip" role="alert">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <strong>Notice:</strong> {{ $alert['message'] ?? 'Important weather information.' }}
+            </div>
+        @endforeach
     @endif
 
     <div class="page-wrapper">

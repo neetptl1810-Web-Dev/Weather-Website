@@ -34,6 +34,7 @@ const WeatherApp = {
     this.initMap();
     this.setupAccessibility();
     this.injectAnimations();
+    this.initDynamicWeather();
 
     console.log('⚡ Weather Broadcast UI initialized');
   },
@@ -313,5 +314,59 @@ const WeatherApp = {
 
   setupAccessibility() {
     // Add skip link if needed, etc.
+  },
+
+  // 🌩️ Dynamic Weather Adapation
+  initDynamicWeather() {
+    const statusEl = document.getElementById('weather-status');
+    if (!statusEl) return;
+
+    const statusText = statusEl.textContent.trim().toLowerCase();
+    const body = document.body;
+    
+    // Map condition to theme
+    let themeClass = 'theme-cloudy'; // fallback
+    if (statusText.includes('clear') || statusText.includes('sun')) {
+      themeClass = 'theme-sunny';
+    } else if (statusText.includes('rain') || statusText.includes('drizzle')) {
+      themeClass = 'theme-rain';
+    } else if (statusText.includes('snow')) {
+      themeClass = 'theme-snow';
+    } else if (statusText.includes('thunderstorm') || statusText.includes('storm')) {
+      themeClass = 'theme-storm';
+    }
+
+    body.classList.add('dynamic-weather', themeClass);
+
+    // Initialize particles for specific themes
+    if (themeClass === 'theme-rain') {
+      this.generateParticles('rain-drop', 60);
+    } else if (themeClass === 'theme-snow') {
+      this.generateParticles('snow-flake', 40);
+    }
+  },
+
+  generateParticles(className, count) {
+    const container = document.createElement('div');
+    container.className = 'weather-particles-container';
+    document.body.prepend(container);
+
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement('div');
+      p.className = className;
+      p.style.left = Math.random() * 100 + 'vw';
+      
+      if (className === 'rain-drop') {
+         p.style.animationDuration = (Math.random() * 0.5 + 0.4) + 's';
+         p.style.animationDelay = (Math.random() * 2) + 's';
+      } else if (className === 'snow-flake') {
+         p.style.animationDuration = (Math.random() * 4 + 4) + 's';
+         p.style.animationDelay = (Math.random() * 5) + 's';
+         p.style.width = p.style.height = (Math.random() * 4 + 4) + 'px';
+         p.style.opacity = Math.random() * 0.6 + 0.2;
+      }
+      
+      container.appendChild(p);
+    }
   }
 };
