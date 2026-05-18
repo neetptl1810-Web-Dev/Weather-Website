@@ -197,7 +197,7 @@
                             </div>
                             @if($key === 'aqi')
                                 <div class="aqi-track">
-                                    <div class="aqi-fill" style="width: {{ min(($metric['val'] / 300) * 100, 100) }}%"></div>
+                                    <div class="aqi-fill" style="width: {{ 100 - min($metric['val'], 100) }}%"></div>
                                 </div>
                                 <div class="aqi-labels"><span>Good</span><span>Moderate</span><span>Poor</span></div>
                             @endif

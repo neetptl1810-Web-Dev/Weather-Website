@@ -239,14 +239,12 @@ class WeatherApiService
 
     protected function formatAqi(float $europeanAqi): array
     {
-        if ($europeanAqi <= 20) { $level = 'good'; $val = 1; }
-        elseif ($europeanAqi <= 40) { $level = 'good'; $val = 2; }
-        elseif ($europeanAqi <= 60) { $level = 'moderate'; $val = 3; }
-        elseif ($europeanAqi <= 80) { $level = 'poor'; $val = 4; }
-        else { $level = 'poor'; $val = 5; }
+        if ($europeanAqi <= 40) { $level = 'good'; }
+        elseif ($europeanAqi <= 60) { $level = 'moderate'; }
+        else { $level = 'poor'; }
 
         return [
-            'val' => $val * 20, // Scale to 100 for CSS
+            'val' => round($europeanAqi),
             'level' => $level,
             'icon' => '🫁',
             'unit' => ''
